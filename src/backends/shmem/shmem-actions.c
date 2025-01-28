@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
- 
+
 #include "shmem-actions.h"
 #include "backends/shmem/shmem-manager.h"
 #include "laik/action.h"
@@ -38,6 +38,8 @@ void laik_shmem_addMapBroadcast(Laik_ActionSeq* as, Laik_BackendAction* ba, int 
     a->primary = primary;
     a->cs = cs;
     a->subgroup = ba->outputGroup;
+    a->ptr = 0;
+    a->shmp = 0;
 }
 
 void laik_shmem_addMapGroupReduce(Laik_ActionSeq* as, Laik_BackendAction* ba, int round, int primary, Shmem_CopyScheme cs, int chain_idx)
@@ -62,6 +64,8 @@ void laik_shmem_addReceiveMap(Laik_ActionSeq* as, Laik_Range* range, int mapNo, 
     a->mapNo = mapNo;
     a->count = count;
     a->from_rank = from_rank;
+    a->ptr = 0;
+    a->shmp = 0;
 }
 
 void laik_shmem_addGroupBroadcast(Laik_ActionSeq* as, Laik_BackendAction* ba, int round, char* buf, int chain_idx, int primary){
@@ -100,7 +104,8 @@ void laik_shmem_addShmemCopyToBuf(Laik_ActionSeq* as, int round, Laik_Range* ran
     a->sender = sender;
     a->cs = cs;
     a->receiver = receiver;
-
+    a->ptr = 0;
+    a->shmp = 0;
 }
 
 void laik_shmem_addTwoCopyMap(Laik_ActionSeq* as, Laik_Range* range, int mapNo, int count, int receiver, int round, int tid, int chain_idx)
@@ -135,9 +140,9 @@ void laik_shmem_exec_TwoCopyMap(Laik_Action* a, Laik_TransitionContext* tc, Laik
 {
     Laik_A_ShmemTwoCopyMap* aa = (Laik_A_ShmemTwoCopyMap*) a;
     Laik_Mapping* m = &tc->fromList->map[aa->mapNo];
-        
+
     shmem_sendPack(m, aa->range, aa->to_rank, idata);
-    
+
 }
 
 
@@ -174,14 +179,14 @@ void laik_shmem_exec_GroupReduce(Laik_Action * a, Laik_ActionSeq* as, Laik_Trans
     Laik_Shmem_Comm* sg = g->backend_data[idata->index];
 
     if(sg->myid == ba->primary)
-    {   
+    {
         // collect input values
         int count = laik_aseq_groupCount(as, ba->subgroup, chain_idx);
         for(int i = 1; i < count; ++i)
-        {   
+        {
 
             int task = laik_aseq_taskInGroup(as, ba->subgroup, i, chain_idx);
-            shmem_recv(ba -> buf, ba->count, task, data, idata, g, ba->redOp); 
+            shmem_recv(ba -> buf, ba->count, task, data, idata, g, ba->redOp);
         }
     }
     else {
@@ -209,9 +214,9 @@ void laik_shmem_exec_CopyToBuf(Laik_Action* a, Laik_TransitionContext* tc, Laik_
 
     }else {
         Laik_Mapping* m = &tc->toList->map[aa->toMapNo];
-        shmem_recvMap(m, aa->range, aa->sender, idata, g);
+        shmem_recvCopyToBufMap(m, aa->range, aa->sender, idata, g, aa);
     }
-    
+
 
 }
 
@@ -220,10 +225,10 @@ void laik_shmem_exec_ReceiveMap(Laik_Action* a, Laik_TransitionContext* tc, Laik
     Laik_A_ShmemReceiveMap* aa = (Laik_A_ShmemReceiveMap*) a;
 
     Laik_Mapping* map = &tc->toList->map[aa->mapNo];
-    
-    shmem_recvMap(map, aa->range, aa->from_rank, idata, g);
 
-    
+    shmem_recvReceiveMapMap(map, aa->range, aa->from_rank, idata, g, aa);
+
+
 }
 
 void laik_shmem_exec_MapGroupReduce(Laik_ActionSeq* as, Laik_Action* a, Laik_TransitionContext* tc, Laik_Inst_Data* idata, Laik_Group* g)
@@ -233,15 +238,15 @@ void laik_shmem_exec_MapGroupReduce(Laik_ActionSeq* as, Laik_Action* a, Laik_Tra
     Laik_Data* data = tc->data;
     int chain_idx = a->chain_idx;
     Laik_Mapping* map = &tc->fromList->map[aa->mapNo];
-    
+
     if(aa->primary == sg->myid)
-    {   
-        
+    {
+
         int count = laik_aseq_groupCount(as, aa->subgroup, chain_idx);
 
         //collect input values of all other tasks
         for(int i = 0; i < count; ++i)
-        {   
+        {
             int task = laik_aseq_taskInGroup(as, aa->subgroup, i, chain_idx);
             if(task == sg->myid) continue;
             shmem_recvReduce(map, aa->range, data, task, idata,g, aa->redOp);
@@ -258,7 +263,7 @@ void laik_shmem_exec_MapGroupReduce(Laik_ActionSeq* as, Laik_Action* a, Laik_Tra
 
         }
     }
-    
+
 }
 
 void laik_shmem_exec_MapBroadCast(Laik_ActionSeq* as , Laik_Action* a, Laik_TransitionContext* tc, Laik_Inst_Data* idata, Laik_Group* g)
@@ -268,10 +273,10 @@ void laik_shmem_exec_MapBroadCast(Laik_ActionSeq* as , Laik_Action* a, Laik_Tran
     Laik_Mapping* map = &tc->toList->map[aa->mapNo];
     Laik_Shmem_Comm* sg = g->backend_data[idata->index];
 
-    
-    
+
+
     if(aa->primary == sg->myid)
-    {           
+    {
         int count = laik_aseq_groupCount(as, aa->subgroup, chain_idx);
 
         int (*send)(Laik_Mapping*, Laik_Range*, int, Laik_Inst_Data*);
@@ -290,10 +295,10 @@ void laik_shmem_exec_MapBroadCast(Laik_ActionSeq* as , Laik_Action* a, Laik_Tran
             int task = laik_aseq_taskInGroup(as, aa->subgroup, i, chain_idx);
             send(map, aa->range, task, idata);
         }
-        
+
     }
     else {
-        shmem_recvMap(map, aa->range, aa->primary, idata, g);
+        shmem_recvBroadCastMap(map, aa->range, aa->primary, idata, g, aa);
     }
 }
 

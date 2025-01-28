@@ -26,6 +26,7 @@
 #include "laik.h"
 #include "shmem-allocator.h"
 #include "laik-internal.h"
+#include "shmem-actions.h"
 
 
 #include <assert.h>
@@ -90,7 +91,7 @@ static void shmem_init_sync(int rank, int size, Laik_Inst_Data* idata, Laik_Grou
     if(rank == 0)
     {
         for(int i = 1; i < size; ++i)
-        {   
+        {
             int received;
             RECV_INTS(&received, 1, i, idata, g);
             barrier += received;
@@ -98,18 +99,18 @@ static void shmem_init_sync(int rank, int size, Laik_Inst_Data* idata, Laik_Grou
 
         assert(barrier == size);
     }else {
-        
+
         SEND_INTS(&barrier, 1, 0, idata, g);
     }
 
     if(rank == 0)
     {
         for(int i = 1; i < size; ++i)
-        {   
+        {
             SEND_INTS(&barrier, 1, i, idata, g);
         }
     }else {
-    
+
         RECV_INTS(&barrier, 1, 0, idata, g);
 
         assert(barrier == size);
@@ -156,7 +157,7 @@ static void shmem_parse_affinity_mask(Laik_Shmem_Data* sd)
 
         if(!override[i])
             break;
-        
+
         ++i;
     }
     laik_panic("No fitting mask");
@@ -184,14 +185,14 @@ static int shmem_split_location(int rank, int size, Laik_Inst_Data* idata, int s
 
     int segment_size =  sizeof(struct shmInitSeg);
     segment_size +=  sd->affinity ? sizeof(atomic_int) * size : 0;
-  
+
     int address = shmAddr + mask;
     int shmid = shmget(address, segment_size, IPC_EXCL | 0644 | IPC_CREAT);
     if (shmid == -1)
     {
 
         shmid = shmget(address, segment_size, 0644);
-        
+
         if (shmid == -1)
         {
             laik_panic(strerror(errno));
@@ -214,7 +215,7 @@ static int shmem_split_location(int rank, int size, Laik_Inst_Data* idata, int s
     {
         created = true;
         // creator initialization
-        
+
         shmp = shmat(shmid, NULL, 0);
         if (shmp == (void *)-1)
             return SHMEM_SHMAT_FAILED;
@@ -304,7 +305,7 @@ int shmem_recv(void *buffer, int count,int sender, Laik_Data* data, Laik_Inst_Da
     int shmid;
     Laik_Shmem_Comm* sg = shmem_comm(idata, g);
     shmid = sg->headershmids[sender];
-  
+
     // Attach to the segment to get a pointer to it.
     volatile struct commHeader *shmp = shmem_manager_attach(shmid, 0);
 
@@ -316,7 +317,7 @@ int shmem_recv(void *buffer, int count,int sender, Laik_Data* data, Laik_Inst_Da
     int bufShmid = shmp->shmid;
 
     char *bufShmp = shmem_manager_attach(bufShmid, 0);
-  
+
     int bufSize = data->elemsize * count;
     int receivedSize = received * data->elemsize;
     if(redOp == LAIK_RO_None)
@@ -361,11 +362,11 @@ int shmem_sendMap(Laik_Mapping* map, Laik_Range* range, int receiver, Laik_Inst_
     {
     }
 
-    
-    return SHMEM_SUCCESS;   
+
+    return SHMEM_SUCCESS;
 }
 
-int shmem_sendPack(Laik_Mapping* map, Laik_Range* range, int receiver,  Laik_Inst_Data* idata){   
+int shmem_sendPack(Laik_Mapping* map, Laik_Range* range, int receiver,  Laik_Inst_Data* idata){
     Laik_Shmem_Data* sd = idata->backend_data;
     size_t count = laik_range_size(range);
 
@@ -381,16 +382,16 @@ int shmem_sendPack(Laik_Mapping* map, Laik_Range* range, int receiver,  Laik_Ins
 
     // init copy buffer
     ll->init(&tmp, sd->cpybuf.ptr, 0);
-    
+
     struct commHeader* shmp = sd->shmp;
     shmp->range = *range;
     Laik_Range tmpRange = *range;
     laik_data_copy(&tmpRange, map, &tmp);
 
     shmp->shmid = sd->cpybuf.shmid;
-    
+
     shmp->receiver = receiver;
-   
+
 
     while(shmp->receiver != -1)
     {
@@ -418,17 +419,25 @@ static void shmem_tmpMap(Laik_Mapping* tmp, Laik_Range* range, char* ptr, Laik_M
     tmp->data = map->data;
 }
 
-int shmem_recvMap(Laik_Mapping* map, Laik_Range* range, int sender, Laik_Inst_Data* idata, Laik_Group* g)
+int shmem_recvCopyToBufMap(Laik_Mapping* map, Laik_Range* range, int sender, Laik_Inst_Data* idata, Laik_Group* g, Laik_A_ShmemCopyToBuf* a)
 {
     int shmid;
     Laik_Shmem_Comm* sg = shmem_comm(idata, g);
     shmid = sg->headershmids[sender];
-    struct commHeader* shmp = shmem_manager_attach(shmid, 0);
+    if (!a->shmp)
+    {
+         a->shmp = shmem_manager_attach(shmid, 0);
+    }
+    struct commHeader* shmp = a->shmp;
     while(shmp->receiver != sg->myid)
     {
     }
-    char* ptr = shmem_manager_attach(shmp->shmid, 0);
-    
+    if (!a->ptr)
+    {
+        a->ptr = shmem_manager_attach(shmp->shmid, 0);
+    }
+    char* ptr = a->ptr;
+
     Laik_Mapping tmp;
 
     // create temporary mapping
@@ -439,8 +448,78 @@ int shmem_recvMap(Laik_Mapping* map, Laik_Range* range, int sender, Laik_Inst_Da
 
     free(tmp.layout);
 
-    shmem_manager_detach((char*)shmp);
-    shmem_manager_detach(ptr);
+    //shmem_manager_detach((char*)shmp);
+    //shmem_manager_detach(ptr);
+
+    return SHMEM_SUCCESS;
+}
+
+int shmem_recvReceiveMapMap(Laik_Mapping* map, Laik_Range* range, int sender, Laik_Inst_Data* idata, Laik_Group* g, Laik_A_ShmemReceiveMap* a)
+{
+    int shmid;
+    Laik_Shmem_Comm* sg = shmem_comm(idata, g);
+    shmid = sg->headershmids[sender];
+    if (!a->shmp)
+    {
+         a->shmp = shmem_manager_attach(shmid, 0);
+    }
+    struct commHeader* shmp = a->shmp;
+    while(shmp->receiver != sg->myid)
+    {
+    }
+    if (!a->ptr)
+    {
+        a->ptr = shmem_manager_attach(shmp->shmid, 0);
+    }
+    char* ptr = a->ptr;
+
+    Laik_Mapping tmp;
+
+    // create temporary mapping
+    shmem_tmpMap(&tmp, range, ptr, map, shmp);
+    laik_data_copy(range, &tmp, map);
+
+    shmp->receiver = -1;
+
+    free(tmp.layout);
+
+    //shmem_manager_detach((char*)shmp);
+    //shmem_manager_detach(ptr);
+
+    return SHMEM_SUCCESS;
+}
+
+int shmem_recvBroadCastMap(Laik_Mapping* map, Laik_Range* range, int sender, Laik_Inst_Data* idata, Laik_Group* g, Laik_A_ShmemMapBroadCast* a)
+{
+    int shmid;
+    Laik_Shmem_Comm* sg = shmem_comm(idata, g);
+    shmid = sg->headershmids[sender];
+    if (!a->shmp)
+    {
+         a->shmp = shmem_manager_attach(shmid, 0);
+    }
+    struct commHeader* shmp = a->shmp;
+    while(shmp->receiver != sg->myid)
+    {
+    }
+    if (!a->ptr)
+    {
+        a->ptr = shmem_manager_attach(shmp->shmid, 0);
+    }
+    char* ptr = a->ptr;
+
+    Laik_Mapping tmp;
+
+    // create temporary mapping
+    shmem_tmpMap(&tmp, range, ptr, map, shmp);
+    laik_data_copy(range, &tmp, map);
+
+    shmp->receiver = -1;
+
+    free(tmp.layout);
+
+    //shmem_manager_detach((char*)shmp);
+    //shmem_manager_detach(ptr);
 
     return SHMEM_SUCCESS;
 }
@@ -561,30 +640,30 @@ int shmem_update_comm(Laik_Shmem_Comm* sg, Laik_Group* g, Laik_Inst_Data* idata,
         tmpColours[sg->location] = newColour++;
         sg->location = tmpColours[sg->location];
 
-        if(groupSizes[0] == sd->ranksPerIslands) 
+        if(groupSizes[0] == sd->ranksPerIslands)
             tmpColours[colour] = newColour++;
 
 
         for (int i = 1; i < size; i++)
-        {   
+        {
             RECV_INTS(&colour, 1, i, idata, g);
 
             if(tmpColours[colour] == -1)
                 tmpColours[colour] = newColour++;
-            
+
             // get division and new rank
             sg->locations[i] = tmpColours[colour];
             if(groupSizes[sg->locations[i]] == 0) num_islands++;
             int new_rank = groupSizes[sg->locations[i]]++;
-            
+
             // if we reached <perIsland> ranks <colour> if mappes to a higher number
-            if(groupSizes[sg->locations[i]] == sd->ranksPerIslands) 
+            if(groupSizes[sg->locations[i]] == sd->ranksPerIslands)
                 tmpColours[colour] = newColour++;
-            
+
             // assign rank
             sg->secondaryIds[i] = new_rank;
 
-            
+
         }
 
         if (created && shmctl(shmid, IPC_RMID, 0) == -1)
@@ -633,8 +712,8 @@ int shmem_update_comm(Laik_Shmem_Comm* sg, Laik_Group* g, Laik_Inst_Data* idata,
     for(int i = 0; i < size && ii < sg->size; ++i)
     {
         if(sg->locations[i] == sg->location){
-            sg->primaryRanks[ii++] = i; 
-        } 
+            sg->primaryRanks[ii++] = i;
+        }
     }
 
     sg->headershmids = malloc(sg->size * sizeof(int));
@@ -667,7 +746,7 @@ int shmem_update_comm(Laik_Shmem_Comm* sg, Laik_Group* g, Laik_Inst_Data* idata,
 
     sg->libLocations[g->myid] = 1;
 
-    sg->primaryRanks[sg->myid] = rank; 
+    sg->primaryRanks[sg->myid] = rank;
 
     // init barrier in case the zero copy scheme was chosen
     if(sd->copyScheme == 0)
@@ -691,11 +770,11 @@ int shmem_update_comm(Laik_Shmem_Comm* sg, Laik_Group* g, Laik_Inst_Data* idata,
 
             sg->barrier = shmem_manager_attach(shmid, 0);
         }
-        
+
     }
 
     return SHMEM_SUCCESS;
-    
+
 }
 
 int shmem_init_comm(Laik_Shmem_Comm *sg, Laik_Group *g, Laik_Inst_Data *idata, int rank, int size)
@@ -742,7 +821,7 @@ int shmem_secondary_init(Laik_Shmem_Comm* sg, Laik_Inst_Data* idata, Laik_Group*
     {
         char *copyScheme = getenv("LAIK_SHMEM_COPY_SCHEME");
         copyToken = copyScheme == NULL ? NULL : strtok_r(copyScheme, ",", &saveptrC);
-    
+
     }else {
         copyToken = strtok_r(NULL, ",", &saveptrC);
     }
@@ -767,7 +846,7 @@ int shmem_secondary_init(Laik_Shmem_Comm* sg, Laik_Inst_Data* idata, Laik_Group*
 
         sd->copyScheme = 0;
     }
-    else 
+    else
     {
         laik_panic("Please provide a correct copy scheme: 0, 1 or 2");
     }
@@ -792,7 +871,7 @@ int shmem_secondary_init(Laik_Shmem_Comm* sg, Laik_Inst_Data* idata, Laik_Group*
 void shmem_transformSubGroup(Laik_ActionSeq* as, Laik_Shmem_Comm* sg, int chain_idx){
 
     bool* processed = malloc(sg->numIslands * sizeof(bool));
-    int* tmp = malloc(sg->size * sizeof(int)); 
+    int* tmp = malloc(sg->size * sizeof(int));
     int last_idx = chain_idx - 1;
     for(int subgroup = 0; subgroup < as->subgroupCount; ++subgroup)
     {

@@ -38,7 +38,7 @@
 #define LAIK_AT_ShmemZeroCopySync (LAIK_AT_Backend + 49)
 
 
-typedef 
+typedef
 enum Shmem_CopyScheme{
     SHMEM_None,
     SHMEM_OneCopy,
@@ -47,14 +47,18 @@ enum Shmem_CopyScheme{
 
 
 #pragma pack(push, 1)
-typedef struct{
+typedef struct _Laik_A_ShmemMapBroadCast Laik_A_ShmemMapBroadCast;
+struct _Laik_A_ShmemMapBroadCast
+{
     Laik_Action h;
     Laik_Range* range;
     int mapNo;
     int primary;
     Shmem_CopyScheme cs;
     int subgroup;
-} Laik_A_ShmemMapBroadCast;
+    struct commHeader* shmp;
+    char* ptr;
+};
 
 typedef struct{
     Laik_Action h;
@@ -66,15 +70,20 @@ typedef struct{
     Laik_ReductionOperation redOp;
 } Laik_A_ShmemMapGroupReduce;
 
-typedef struct{
+typedef struct _Laik_A_ShmemReceiveMap Laik_A_ShmemReceiveMap;
+struct _Laik_A_ShmemReceiveMap
+{
     Laik_Action h;
     Laik_Range* range;
     int mapNo;
     int count;
     int from_rank;
-} Laik_A_ShmemReceiveMap;
+    struct commHeader* shmp;
+    char* ptr;
+} ;
 
-typedef struct
+typedef struct _Laik_A_ShmemCopyToBuf Laik_A_ShmemCopyToBuf;
+struct _Laik_A_ShmemCopyToBuf
 {
     Laik_Action h;
     int fromMapNo;
@@ -83,9 +92,13 @@ typedef struct
     int receiver;
     Shmem_CopyScheme cs;
     Laik_Range* range;
-} Laik_A_ShmemCopyToBuf;
+    struct commHeader* shmp;
+    char* ptr;
+};
 
-typedef struct 
+
+
+typedef struct
 {
     Laik_Action h;
     int count;
@@ -105,7 +118,7 @@ typedef struct
     char* buf;
 } Laik_A_ShmemGroupBroadCast;
 
-typedef struct 
+typedef struct
 {
     Laik_Action h;
     Laik_Range* range;

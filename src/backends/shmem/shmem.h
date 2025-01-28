@@ -31,6 +31,7 @@
 #include <laik-internal.h>
 #include <stddef.h>
 #include <laik.h>
+//#include "shmem-actions.h"
 
 #define SHMEM_FAILURE -1
 #define SHMEM_SUCCESS 0
@@ -42,6 +43,12 @@
 #define SHMEM_SEGMENT_NOT_FOUND 6
 
 #define SHMEM_MAX_ERROR_STRING 100
+
+// forward declarations
+typedef struct _Laik_A_ShmemCopyToBuf Laik_A_ShmemCopyToBuf;
+typedef struct _Laik_A_ShmemReceiveMap Laik_A_ShmemReceiveMap;
+typedef struct _Laik_A_ShmemMapBroadCast Laik_A_ShmemMapBroadCast;
+
 
 // some definitions for the shared memory backend
 typedef enum DataSpec{
@@ -81,7 +88,7 @@ typedef struct _Laik_Shmem_Comm
     int* headershmids;
 
     //-------------------------------------------
-    //zero copy specific 
+    //zero copy specific
 
     // saves all library ranks on the same island
     unsigned char* libLocations;
@@ -120,7 +127,7 @@ typedef struct _Laik_Shmem_Data
     //copy buffer for two copy actions
     struct cpyBuf cpybuf;
 
-    
+
 }Laik_Shmem_Data;
 
 #pragma pack(pop)
@@ -147,7 +154,12 @@ int shmem_recv(void *buffer, int count,int sender, Laik_Data* data, Laik_Inst_Da
 
 int shmem_sendMap(Laik_Mapping* map, Laik_Range* range, int receiver, Laik_Inst_Data* idata);
 
-int shmem_recvMap(Laik_Mapping* map, Laik_Range* range, int sender, Laik_Inst_Data* idata, Laik_Group* g);
+//int shmem_recvMap(Laik_Mapping* map, Laik_Range* range, int sender, Laik_Inst_Data* idata, Laik_Group* g);
+int shmem_recvCopyToBufMap(Laik_Mapping* map, Laik_Range* range, int sender, Laik_Inst_Data* idata, Laik_Group* g, Laik_A_ShmemCopyToBuf* a);
+
+int shmem_recvReceiveMapMap(Laik_Mapping* map, Laik_Range* range, int sender, Laik_Inst_Data* idata, Laik_Group* g, Laik_A_ShmemReceiveMap* a);
+
+int shmem_recvBroadCastMap(Laik_Mapping* map, Laik_Range* range, int sender, Laik_Inst_Data* idata, Laik_Group* g, Laik_A_ShmemMapBroadCast* a);
 
 int shmem_sendPack(Laik_Mapping* map, Laik_Range* range, int receiver, Laik_Inst_Data* idata);
 
