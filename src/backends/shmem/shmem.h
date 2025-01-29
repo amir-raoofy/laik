@@ -48,6 +48,7 @@
 typedef struct _Laik_A_ShmemCopyToBuf Laik_A_ShmemCopyToBuf;
 typedef struct _Laik_A_ShmemReceiveMap Laik_A_ShmemReceiveMap;
 typedef struct _Laik_A_ShmemMapBroadCast Laik_A_ShmemMapBroadCast;
+typedef struct _Laik_A_ShmemTwoCopyMap Laik_A_ShmemTwoCopyMap;
 
 
 // some definitions for the shared memory backend
@@ -152,7 +153,7 @@ int shmem_send(void *buffer, int count, int datatype, int recipient,  Laik_Inst_
 
 int shmem_recv(void *buffer, int count,int sender, Laik_Data* data, Laik_Inst_Data* idata, Laik_Group* g, Laik_ReductionOperation redOp);
 
-int shmem_sendMap(Laik_Mapping* map, Laik_Range* range, int receiver, Laik_Inst_Data* idata);
+int shmem_sendMap(Laik_Mapping* map, Laik_Range* range, int receiver, Laik_Inst_Data* idata, Laik_Action* a);
 
 //int shmem_recvMap(Laik_Mapping* map, Laik_Range* range, int sender, Laik_Inst_Data* idata, Laik_Group* g);
 int shmem_recvCopyToBufMap(Laik_Mapping* map, Laik_Range* range, int sender, Laik_Inst_Data* idata, Laik_Group* g, Laik_A_ShmemCopyToBuf* a);
@@ -161,7 +162,7 @@ int shmem_recvReceiveMapMap(Laik_Mapping* map, Laik_Range* range, int sender, La
 
 int shmem_recvBroadCastMap(Laik_Mapping* map, Laik_Range* range, int sender, Laik_Inst_Data* idata, Laik_Group* g, Laik_A_ShmemMapBroadCast* a);
 
-int shmem_sendPack(Laik_Mapping* map, Laik_Range* range, int receiver, Laik_Inst_Data* idata);
+int shmem_sendPack(Laik_Mapping* map, Laik_Range* range, int receiver, Laik_Inst_Data* idata, Laik_Action* a);
 
 int shmem_recvReduce(Laik_Mapping* map, Laik_Range* range, Laik_Data* data, int sender, Laik_Inst_Data* idata, Laik_Group* g, Laik_ReductionOperation redOp);
 

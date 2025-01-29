@@ -45,7 +45,7 @@ void def_shmem_free(Laik_Data* d, Laik_Mapping* map){
     }else {
         shmem_free(map->header);
     }
-    
+
 }
 
 // cantors pairing fucntion
@@ -82,7 +82,7 @@ void* def_shmem_malloc(Laik_Data* d, Laik_Layout* ll, Laik_Range* range, Laik_Pa
     };
 
     Laik_Group* g = par->group;
-    
+
     Laik_Shmem_Comm* sg = g->backend_data[idata->index];
 
     // expand ranges such that all ranges on the current island are covered
@@ -153,7 +153,7 @@ bool is_shmem_allocator(Laik_Allocator* allocator)
 }
 
 void* shmem_manager_attach(int shmid, int flag)
-{   
+{
     size_t header_size = PAD(HEADER_SIZE, HEADER_PAD);
     void* ptr = shmat(shmid, NULL, flag);
     if(ptr == (void*)-1)
@@ -162,8 +162,34 @@ void* shmem_manager_attach(int shmid, int flag)
     return ((char*)ptr) + header_size;
 }
 
+void* shmem_manager_attach_and_set_address(int shmid, int flag, void** address)
+{
+    size_t header_size = PAD(HEADER_SIZE, HEADER_PAD);
+    void* ptr = shmat(shmid, NULL, flag);
+    *address = ptr;
+    if(ptr == (void*)-1)
+        laik_log(LAIK_LL_Panic, "Shared memory manager could not attach segment with id %d", shmid);
+
+    return ((char*)ptr) + header_size;
+}
+
+void* shmem_manager_reattach_with_address(int shmid, int flag, void* address)
+{
+    size_t header_size = PAD(HEADER_SIZE, HEADER_PAD);
+
+    if(shmdt(address) == -1)
+        laik_log(LAIK_LL_Panic, "Could not detach shared memory segment %p", address);
+
+    void* ptr = shmat(shmid, address, flag);
+    if(ptr == (void*)-1)
+        laik_log(LAIK_LL_Panic, "Shared memory manager could not reattach segment with id %d", shmid);
+
+    return ((char*)ptr) + header_size;
+}
+
 void shmem_manager_detach(void* ptr)
 {
+
     size_t header_size = PAD(HEADER_SIZE, HEADER_PAD);
     void* start = ((char*)ptr) - header_size;
     if(shmdt(start) == -1)

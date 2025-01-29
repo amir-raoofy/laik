@@ -45,11 +45,12 @@ void shmem_cpybuf_alloc(struct cpyBuf* buf, size_t size){
     {
         return;
     }
-    else 
+    else
     {
         if(buf->ptr != NULL) shmem_free( buf->ptr);
         int shmid;
         buf -> ptr = shmem_alloc_f(size, &shmid, cb_huge_pages);
+        laik_log(1, "DBG: reallocating %zu, %zu, %p, %d \n", buf -> size , size, (void*) buf -> ptr, shmid);
         buf -> size = size;
         assert(shmid > 0);
         buf -> shmid = shmid;
@@ -70,7 +71,7 @@ void shmem_cpybuf_request(struct cpyBuf* buf, size_t size)
 
 void shmem_cpybuf_alloc_requested(struct cpyBuf* cpyBuf)
 {
-   if(cpyBuf->request > 0) 
+   if(cpyBuf->request > 0)
     shmem_cpybuf_alloc(cpyBuf, cpyBuf->request);
-   
+
 }

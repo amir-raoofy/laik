@@ -348,7 +348,7 @@ int shmem_recv(void *buffer, int count,int sender, Laik_Data* data, Laik_Inst_Da
     return SHMEM_SUCCESS;
 }
 
-int shmem_sendMap(Laik_Mapping* map, Laik_Range* range, int receiver, Laik_Inst_Data* idata)
+int shmem_sendMap(Laik_Mapping* map, Laik_Range* range, int receiver, Laik_Inst_Data* idata, Laik_Action* a)
 {
     (void) range;
     int shmid = shmem_manager_shmid(map->header);
@@ -366,31 +366,36 @@ int shmem_sendMap(Laik_Mapping* map, Laik_Range* range, int receiver, Laik_Inst_
     return SHMEM_SUCCESS;
 }
 
-int shmem_sendPack(Laik_Mapping* map, Laik_Range* range, int receiver,  Laik_Inst_Data* idata){
+int shmem_sendPack(Laik_Mapping* map, Laik_Range* range, int receiver,  Laik_Inst_Data* idata, Laik_Action* a){
+
+    Laik_A_ShmemTwoCopyMap* aa = (Laik_A_ShmemTwoCopyMap*) a;
+
     Laik_Shmem_Data* sd = idata->backend_data;
     size_t count = laik_range_size(range);
 
     // obtain large enough copy buffer
-    shmem_cpybuf_alloc(&sd->cpybuf, count * map->data->elemsize + map->layout->header_size);
+    shmem_cpybuf_alloc(&aa->cpybuf, count * map->data->elemsize + map->layout->header_size);
     Laik_Mapping tmp = *map;
-    tmp.start = tmp.base = (char*)sd->cpybuf.ptr + map->layout->header_size;
-    tmp.header = sd->cpybuf.ptr;
+    tmp.start = tmp.base = (char*)aa->cpybuf.ptr + map->layout->header_size;
+    tmp.header = aa->cpybuf.ptr;
     Laik_Data* data = map->data;
     Laik_Layout* ll = data->layout_factory(1, range);
     tmp.layout = ll;
     tmp.layoutSection = tmp.mapNo = 0;
 
     // init copy buffer
-    ll->init(&tmp, sd->cpybuf.ptr, 0);
+    ll->init(&tmp, aa->cpybuf.ptr, 0);
 
-    struct commHeader* shmp = sd->shmp;
+    struct commHeader* shmp = aa->shmp;
     shmp->range = *range;
     Laik_Range tmpRange = *range;
     laik_data_copy(&tmpRange, map, &tmp);
 
-    shmp->shmid = sd->cpybuf.shmid;
+    shmp->shmid = aa->cpybuf.shmid;
 
     shmp->receiver = receiver;
+
+    laik_log(1, "DBG Send %p, %p, %d \n", (void*)a, (void*)shmp, shmp->shmid);
 
 
     while(shmp->receiver != -1)
@@ -425,16 +430,28 @@ int shmem_recvCopyToBufMap(Laik_Mapping* map, Laik_Range* range, int sender, Lai
     Laik_Shmem_Comm* sg = shmem_comm(idata, g);
     shmid = sg->headershmids[sender];
     if (!a->shmp)
+    //if (!a->shm_address)
     {
-         a->shmp = shmem_manager_attach(shmid, 0);
+        //a->shmp = shmem_manager_attach(shmid, 0);
+         a->shmp = shmem_manager_attach_and_set_address(shmid, 0, &a->shm_address);
+    }
+    //else
+    {
+         //a->shmp = shmem_manager_reattach_with_address(shmid, 0, a->shm_address);
     }
     struct commHeader* shmp = a->shmp;
     while(shmp->receiver != sg->myid)
     {
     }
     if (!a->ptr)
+    //if (!a->ptr_address)
     {
-        a->ptr = shmem_manager_attach(shmp->shmid, 0);
+        //a->ptr = shmem_manager_attach(shmp->shmid, 0);
+        a->ptr = shmem_manager_attach_and_set_address(shmp->shmid, 0, &a->ptr_address);
+    }
+    //else
+    {
+        //a->ptr = shmem_manager_reattach_with_address(shmp->shmid, 0, a->ptr_address);
     }
     char* ptr = a->ptr;
 
@@ -447,6 +464,8 @@ int shmem_recvCopyToBufMap(Laik_Mapping* map, Laik_Range* range, int sender, Lai
     shmp->receiver = -1;
 
     free(tmp.layout);
+
+    laik_log(1, "DBG Recv %p, %p, %p, %p, %d, %d, %d, %d \n", (void*)a, (void*)a->ptr_address, (void*)a->shmp, (void*)ptr, shmid, shmp->shmid, shmem_manager_shmid(a->shmp), shmem_manager_shmid(ptr));
 
     //shmem_manager_detach((char*)shmp);
     //shmem_manager_detach(ptr);
@@ -460,16 +479,28 @@ int shmem_recvReceiveMapMap(Laik_Mapping* map, Laik_Range* range, int sender, La
     Laik_Shmem_Comm* sg = shmem_comm(idata, g);
     shmid = sg->headershmids[sender];
     if (!a->shmp)
+    //if (!a->shm_address)
     {
-         a->shmp = shmem_manager_attach(shmid, 0);
+        //a->shmp = shmem_manager_attach(shmid, 0);
+         a->shmp = shmem_manager_attach_and_set_address(shmid, 0, &a->shm_address);
+    }
+    //else
+    {
+         //a->shmp = shmem_manager_reattach_with_address(shmid, 0, a->shm_address);
     }
     struct commHeader* shmp = a->shmp;
     while(shmp->receiver != sg->myid)
     {
     }
     if (!a->ptr)
+    //if (!a->ptr_address)
     {
-        a->ptr = shmem_manager_attach(shmp->shmid, 0);
+        //a->ptr = shmem_manager_attach(shmp->shmid, 0);
+        a->ptr = shmem_manager_attach_and_set_address(shmp->shmid, 0, &a->ptr_address);
+    }
+    //else
+    {
+        //a->ptr = shmem_manager_reattach_with_address(shmp->shmid, 0, a->ptr_address);
     }
     char* ptr = a->ptr;
 
@@ -482,6 +513,8 @@ int shmem_recvReceiveMapMap(Laik_Mapping* map, Laik_Range* range, int sender, La
     shmp->receiver = -1;
 
     free(tmp.layout);
+
+    laik_log(1, "DBG Recv %p, %p, %p, %p, %d, %d, %d, %d \n", (void*)a, (void*)a->ptr_address, (void*)a->shmp, (void*)ptr, shmid, shmp->shmid, shmem_manager_shmid(a->shmp), shmem_manager_shmid(ptr));
 
     //shmem_manager_detach((char*)shmp);
     //shmem_manager_detach(ptr);
@@ -495,16 +528,28 @@ int shmem_recvBroadCastMap(Laik_Mapping* map, Laik_Range* range, int sender, Lai
     Laik_Shmem_Comm* sg = shmem_comm(idata, g);
     shmid = sg->headershmids[sender];
     if (!a->shmp)
+    //if (!a->shm_address)
     {
-         a->shmp = shmem_manager_attach(shmid, 0);
+        //a->shmp = shmem_manager_attach(shmid, 0);
+         a->shmp = shmem_manager_attach_and_set_address(shmid, 0, &a->shm_address);
+    }
+    //else
+    {
+         //a->shmp = shmem_manager_reattach_with_address(shmid, 0, a->shm_address);
     }
     struct commHeader* shmp = a->shmp;
     while(shmp->receiver != sg->myid)
     {
     }
     if (!a->ptr)
+    //if (!a->ptr_address)
     {
-        a->ptr = shmem_manager_attach(shmp->shmid, 0);
+        //a->ptr = shmem_manager_attach(shmp->shmid, 0);
+        a->ptr = shmem_manager_attach_and_set_address(shmp->shmid, 0, &a->ptr_address);
+    }
+    //else
+    {
+        //a->ptr = shmem_manager_reattach_with_address(shmp->shmid, 0, a->ptr_address);
     }
     char* ptr = a->ptr;
 
@@ -517,6 +562,8 @@ int shmem_recvBroadCastMap(Laik_Mapping* map, Laik_Range* range, int sender, Lai
     shmp->receiver = -1;
 
     free(tmp.layout);
+
+    laik_log(1, "DBG Recv %p, %p, %p, %p, %d, %d, %d, %d \n", (void*)a, (void*)a->ptr_address, (void*)a->shmp, (void*)ptr, shmid, shmp->shmid, shmem_manager_shmid(a->shmp), shmem_manager_shmid(ptr));
 
     //shmem_manager_detach((char*)shmp);
     //shmem_manager_detach(ptr);

@@ -26,6 +26,10 @@ Laik_Allocator* shmem_allocator();
 
 void* shmem_manager_attach(int shmid, int flag);
 
+void* shmem_manager_attach_and_set_address(int shmid, int flag, void** address);
+
+void* shmem_manager_reattach_with_address(int shmid, int flag, void* address);
+
 void shmem_manager_detach(void* ptr);
 
 bool is_shmem_allocator(Laik_Allocator* allocator);

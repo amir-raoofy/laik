@@ -56,7 +56,9 @@ struct _Laik_A_ShmemMapBroadCast
     int primary;
     Shmem_CopyScheme cs;
     int subgroup;
+    void* shm_address;
     struct commHeader* shmp;
+    void* ptr_address;
     char* ptr;
 };
 
@@ -78,7 +80,9 @@ struct _Laik_A_ShmemReceiveMap
     int mapNo;
     int count;
     int from_rank;
+    void* shm_address;
     struct commHeader* shmp;
+    void* ptr_address;
     char* ptr;
 } ;
 
@@ -92,7 +96,9 @@ struct _Laik_A_ShmemCopyToBuf
     int receiver;
     Shmem_CopyScheme cs;
     Laik_Range* range;
+    void* shm_address;
     struct commHeader* shmp;
+    void* ptr_address;
     char* ptr;
 };
 
@@ -118,14 +124,18 @@ typedef struct
     char* buf;
 } Laik_A_ShmemGroupBroadCast;
 
-typedef struct
+
+typedef struct _Laik_A_ShmemTwoCopyMap Laik_A_ShmemTwoCopyMap;
+struct _Laik_A_ShmemTwoCopyMap
 {
     Laik_Action h;
     Laik_Range* range;
     int mapNo;
     int count;
     int to_rank;
-}Laik_A_ShmemTwoCopyMap;
+    struct cpyBuf cpybuf;
+    struct commHeader* shmp;
+};
 
 typedef struct
 {

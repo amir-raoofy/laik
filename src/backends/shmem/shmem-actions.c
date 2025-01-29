@@ -38,8 +38,10 @@ void laik_shmem_addMapBroadcast(Laik_ActionSeq* as, Laik_BackendAction* ba, int 
     a->primary = primary;
     a->cs = cs;
     a->subgroup = ba->outputGroup;
+    a->shm_address = 0;
     a->ptr = 0;
     a->shmp = 0;
+    a->ptr_address = 0;
 }
 
 void laik_shmem_addMapGroupReduce(Laik_ActionSeq* as, Laik_BackendAction* ba, int round, int primary, Shmem_CopyScheme cs, int chain_idx)
@@ -64,8 +66,10 @@ void laik_shmem_addReceiveMap(Laik_ActionSeq* as, Laik_Range* range, int mapNo, 
     a->mapNo = mapNo;
     a->count = count;
     a->from_rank = from_rank;
+    a->shm_address = 0;
     a->ptr = 0;
     a->shmp = 0;
+    a->ptr_address = 0;
 }
 
 void laik_shmem_addGroupBroadcast(Laik_ActionSeq* as, Laik_BackendAction* ba, int round, char* buf, int chain_idx, int primary){
@@ -104,8 +108,10 @@ void laik_shmem_addShmemCopyToBuf(Laik_ActionSeq* as, int round, Laik_Range* ran
     a->sender = sender;
     a->cs = cs;
     a->receiver = receiver;
+    a->shm_address = 0;
     a->ptr = 0;
     a->shmp = 0;
+    a->ptr_address = 0;
 }
 
 void laik_shmem_addTwoCopyMap(Laik_ActionSeq* as, Laik_Range* range, int mapNo, int count, int receiver, int round, int tid, int chain_idx)
@@ -117,6 +123,11 @@ void laik_shmem_addTwoCopyMap(Laik_ActionSeq* as, Laik_Range* range, int mapNo, 
     a->range = range;
     a->count = count;
     a->to_rank = receiver;
+    a->cpybuf.ptr = 0;
+    a->cpybuf.shmid = 0;
+    a->cpybuf.request = 0;
+    a->cpybuf.size = 0;
+    a->shmp = 0;
 }
 
 void laik_shmem_addOneCopyMap(Laik_ActionSeq* as, int mapNo, int shmid, int receiver, int round, int tid, int chain_idx)
@@ -141,7 +152,7 @@ void laik_shmem_exec_TwoCopyMap(Laik_Action* a, Laik_TransitionContext* tc, Laik
     Laik_A_ShmemTwoCopyMap* aa = (Laik_A_ShmemTwoCopyMap*) a;
     Laik_Mapping* m = &tc->fromList->map[aa->mapNo];
 
-    shmem_sendPack(m, aa->range, aa->to_rank, idata);
+    shmem_sendMap(m, aa->range, aa->to_rank, idata, a);
 
 }
 
@@ -207,9 +218,9 @@ void laik_shmem_exec_CopyToBuf(Laik_Action* a, Laik_TransitionContext* tc, Laik_
 
         if(aa->cs == SHMEM_OneCopy)
         {
-            shmem_sendMap(m, aa->range, aa->receiver, idata);
+            shmem_sendMap(m, aa->range, aa->receiver, idata, a);
         }else {
-            shmem_sendPack(m, aa->range, aa->receiver, idata);
+            shmem_sendMap(m, aa->range, aa->receiver, idata, a);
         }
 
     }else {
@@ -257,9 +268,9 @@ void laik_shmem_exec_MapGroupReduce(Laik_ActionSeq* as, Laik_Action* a, Laik_Tra
         // select copy scheme and send value
         if(aa->cs == SHMEM_OneCopy)
         {
-            shmem_sendMap(map, aa->range, aa->primary, idata);
+            shmem_sendMap(map, aa->range, aa->primary, idata, a);
         }else {
-            shmem_sendPack(map, aa->range, aa->primary, idata);
+            shmem_sendMap(map, aa->range, aa->primary, idata, a);
 
         }
     }
@@ -279,21 +290,21 @@ void laik_shmem_exec_MapBroadCast(Laik_ActionSeq* as , Laik_Action* a, Laik_Tran
     {
         int count = laik_aseq_groupCount(as, aa->subgroup, chain_idx);
 
-        int (*send)(Laik_Mapping*, Laik_Range*, int, Laik_Inst_Data*);
+        int (*send)(Laik_Mapping*, Laik_Range*, int, Laik_Inst_Data*, Laik_Action*);
 
         // choose copy scheme
         if(aa->cs == SHMEM_OneCopy)
         {
             send = shmem_sendMap;
         }else{
-            send = shmem_sendPack;
+            send = shmem_sendMap;
         }
 
         // distribute result
         for(int i = 1; i < count; ++i)
         {
             int task = laik_aseq_taskInGroup(as, aa->subgroup, i, chain_idx);
-            send(map, aa->range, task, idata);
+            send(map, aa->range, task, idata, a);
         }
 
     }

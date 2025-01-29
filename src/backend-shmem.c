@@ -466,7 +466,7 @@ void laik_shmem_secondary_exec(Laik_Inst_Data* idata, Laik_ActionSeq *as)
             assert(a->chain_idx == index);
             Laik_A_ShmemTwoCopyMap* aa = (Laik_A_ShmemTwoCopyMap*) a;
             Laik_Mapping* m = &tc->fromList->map[aa->mapNo];
-            shmem_sendPack(m, aa->range, aa->to_rank, idata);
+            shmem_sendMap(m, aa->range, aa->to_rank, idata, a);
             break;
         }
         case LAIK_AT_ShmemOneCopyMap:
@@ -474,7 +474,7 @@ void laik_shmem_secondary_exec(Laik_Inst_Data* idata, Laik_ActionSeq *as)
             assert(a->chain_idx == index);
             Laik_A_ShmemOneCopyMap* aa = (Laik_A_ShmemOneCopyMap*) a;
             Laik_Mapping* m = &tc->fromList->map[aa->mapNo];
-            shmem_sendMap(m, NULL, aa->to_rank, idata);
+            shmem_sendMap(m, NULL, aa->to_rank, idata, a);
             break;
         }
         case LAIK_AT_ShmemReceiveMap:
